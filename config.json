@@ -1,0 +1,37 @@
+{
+  "timezone": "UTC",
+  "schedule": {
+    "active_window_start_min": 9,
+    "active_window_start_max": 12,
+    "active_duration_min": 9,
+    "active_duration_max": 12,
+    "inactive_duration_min": 12,
+    "inactive_duration_max": 15,
+    "day_to_day_variance": 3
+  },
+  "commands": {
+    "owo hunt": {"weight": 55, "max_per_day": null},
+    "owo work": {"weight": 15, "max_per_day": 10},
+    "owo bal": {"weight": 10, "max_per_day": 8},
+    "owo slot 50": {"weight": 8, "max_per_day": 5},
+    "owo profile": {"weight": 5, "max_per_day": 4},
+    "owo zoo": {"weight": 4, "max_per_day": 2},
+    "owo daily": {"weight": 3, "max_per_day": 1},
+    "owo slot 75": {"weight": 1, "max_per_day": 2}
+  },
+  "bankroll": {
+    "stop_loss_percent": 30,
+    "win_lock_duration": 2,
+    "max_bet_percent": 2,
+    "loss_recovery_wait_min": 15,
+    "loss_recovery_wait_max": 30
+  },
+  "human_mimicry": {
+    "min_delay_seconds": 120,
+    "max_delay_seconds": 2700,
+    "batch_chance": 0.3,
+    "fatigue_drop_percent": 15,
+    "lazy_day_chance": 0.1,
+    "energetic_day_chance": 0.1
+  }
+}

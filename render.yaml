@@ -1,0 +1,17 @@
+services:
+  - type: worker
+    name: owobot-render
+    runtime: python
+    repo: https://github.com/yourusername/owobot-render
+    plan: free
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: CHANNEL_ID
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.9.0
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    healthCheckPath: /
+    autoDeploy: true
