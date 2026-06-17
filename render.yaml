@@ -13,5 +13,4 @@ services:
         value: 3.9.0
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py
-    healthCheckPath: /
     autoDeploy: true
