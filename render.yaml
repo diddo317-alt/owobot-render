@@ -2,7 +2,7 @@ services:
   - type: worker
     name: owobot-render
     runtime: python
-    repo: https://github.com/yourusername/owobot-render
+    repo: https://github.com/diddo317-alt/owobot-render
     plan: free
     envVars:
       - key: DISCORD_TOKEN
