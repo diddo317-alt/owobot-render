@@ -11,8 +11,10 @@ class DiscordAPI:
     def __init__(self):
         self.token = os.getenv('DISCORD_TOKEN')
         self.channel_id = os.getenv('CHANNEL_ID')
+        
         # ✅ YOUR WEBHOOK URL
         self.webhook_url = "https://discord.com/api/webhooks/1517291484229931088/AYocNg663jfym1NrYzUoW15qeCcWJEBSJDhW395XpBtbepCt2SbNAZw39JCw4itHCIXf"
+        
         self.base_url = "https://discord.com/api/v9"
         self.headers = {
             "Authorization": f"Bot {self.token}",
@@ -20,61 +22,54 @@ class DiscordAPI:
         }
         self.last_command_time = 0
         self.min_command_interval = 10  # 10 seconds between commands
-        self.owo_bot_name = None
+        
+        # ✅ Your OwO bot name
+        self.owo_bot_name = "OwO#8456"
+        self.my_bot_name = "wowrender#5034"
+        
         self.max_retries = 3
         self.retry_delay = 5
         
-        # ✅ Always use webhook mode
+        # ✅ Webhook mode - this makes OwO#8456 respond!
         self.use_webhook = True
-        logger.info("✅ Using Webhook mode (messages appear as user - OwO bot will respond!)")
+        logger.info(f"✅ Using Webhook mode - {self.owo_bot_name} will respond!")
+        logger.info(f"✅ Bot name: {self.my_bot_name}")
         
-        # Set bot presence/status on initialization
+        # Set bot presence/status
         self.set_presence()
         self.find_owo_bot()
 
     def find_owo_bot(self):
         """Find the OwO bot in the channel"""
         try:
-            # Get recent messages to find OwO bot
             messages = self.get_message_history(50)
             if messages:
                 for msg in messages:
                     author = msg.get('author', {})
-                    author_name = author.get('username', '').lower()
+                    author_name = author.get('username', '')
                     # Check if it's the OwO bot
-                    if 'owo' in author_name or 'owobot' in author_name:
-                        self.owo_bot_name = author.get('username')
-                        logger.info(f"✅ Found OwO bot: {self.owo_bot_name}")
+                    if 'OwO' in author_name or 'owo' in author_name.lower():
+                        self.owo_bot_name = author_name
+                        logger.info(f"✅ Found {self.owo_bot_name} in channel!")
                         return
                 
-                # If not found, use default
-                self.owo_bot_name = "OwO"
-                logger.info("ℹ️ Using default OwO bot name: OwO")
+                logger.info(f"✅ Using known OwO bot: {self.owo_bot_name}")
                 
         except Exception as e:
             logger.warning(f"Could not find OwO bot: {e}")
-            self.owo_bot_name = "OwO"
 
     def set_presence(self, status="online", activity_name="OwO hunting 🐱", activity_type=0):
-        """
-        Set bot presence/status
-        status: "online", "idle", "dnd", "invisible"
-        activity_type: 0=Playing, 1=Streaming, 2=Listening, 3=Watching, 5=Competing
-        activity_name: Name of the activity
-        """
+        """Set bot presence/status"""
         try:
-            # Get gateway information
             gateway_url = f"{self.base_url}/gateway/bot"
             response = requests.get(gateway_url, headers=self.headers)
             
             if response.status_code == 200:
                 gateway_data = response.json()
                 logger.info(f"✅ Gateway connected: {gateway_data.get('url')}")
-                
-                # For bot accounts, we use the gateway connection
                 logger.info(f"🎯 Bot presence: {status} - {activity_type}: {activity_name}")
                 
-                # Send a simple status message to show bot is online
+                # Send status message via webhook
                 self.send_status_message()
                 
             else:
@@ -84,19 +79,19 @@ class DiscordAPI:
             logger.warning(f"Could not set presence: {e}")
 
     def send_status_message(self):
-        """Send a status message to show bot is online"""
+        """Send a status message via webhook"""
         try:
             if self.webhook_url:
                 payload = {
-                    "content": "🟢 Bot is online and ready! (Webhook Mode)",
-                    "username": "OwO Helper",
+                    "content": f"🟢 {self.my_bot_name} is online! Ready to talk to {self.owo_bot_name}!",
+                    "username": "wowrender",
                     "avatar_url": "https://cdn.discordapp.com/embed/avatars/1.png"
                 }
                 
                 response = requests.post(self.webhook_url, json=payload)
                 
                 if response.status_code == 204:
-                    logger.info("✅ Status message sent - bot is online!")
+                    logger.info(f"✅ Status message sent - {self.my_bot_name} is online!")
                 else:
                     logger.warning(f"Could not send status message: {response.status_code}")
                     
@@ -123,42 +118,45 @@ class DiscordAPI:
             return {"success": False, "error": str(e)}
 
     def send_via_webhook(self, command: str) -> Dict[str, Any]:
-        """Send command via webhook (appears as user-like message)"""
+        """Send command via webhook - OwO#8456 will respond to this!"""
         try:
             payload = {
                 "content": command,
-                "username": "OwO Helper",  # Custom name that appears in Discord
-                "avatar_url": "https://cdn.discordapp.com/embed/avatars/1.png"  # Custom avatar
+                "username": "wowrender",  # This is your bot's name in chat
+                "avatar_url": "https://cdn.discordapp.com/embed/avatars/1.png"
             }
             
             response = requests.post(self.webhook_url, json=payload)
             self.last_command_time = time.time()
             
-            if response.status_code == 204:  # Webhook success (no content returned)
+            if response.status_code == 204:  # Webhook success
                 logger.info(f"✅ Command sent via webhook: {command}")
+                logger.info(f"📤 Sent as: wowrender (user-like)")
                 
-                # Wait for OwO bot to respond
-                logger.info("⏳ Waiting for OwO bot response (5 seconds)...")
+                # Wait for OwO#8456 to respond
+                logger.info(f"⏳ Waiting for {self.owo_bot_name} to respond...")
                 time.sleep(5)
                 
-                # Check if OwO bot responded
+                # Check if OwO#8456 responded
                 owo_response = self.check_owo_response(command)
                 
                 if owo_response:
-                    logger.info(f"🤖 OwO bot responded!")
+                    logger.info(f"🤖 {self.owo_bot_name} responded!")
                     logger.info(f"📝 Response: {owo_response[:200]}")
                     return {
                         "success": True,
                         "owo_responded": True,
-                        "owo_response": owo_response
+                        "owo_response": owo_response,
+                        "message": f"✅ {self.owo_bot_name} responded!"
                     }
                 else:
-                    logger.warning("⚠️ No OwO bot response detected")
-                    logger.info("💡 Make sure OwO bot is online in the server!")
+                    logger.warning(f"⚠️ No response from {self.owo_bot_name}")
+                    logger.info(f"💡 Make sure {self.owo_bot_name} is online!")
                     return {
                         "success": True,
                         "owo_responded": False,
-                        "owo_response": None
+                        "owo_response": None,
+                        "message": f"⚠️ {self.owo_bot_name} didn't respond"
                     }
                     
             elif response.status_code == 429:
@@ -184,37 +182,32 @@ class DiscordAPI:
             return {"success": False, "error": str(e)}
 
     def check_owo_response(self, command: str) -> Optional[str]:
-        """Check if OwO bot responded to the command"""
+        """Check if OwO#8456 responded to the command"""
         try:
             # Get recent messages
             url = f"{self.base_url}/channels/{self.channel_id}/messages"
-            params = {"limit": 10}  # Get last 10 messages
+            params = {"limit": 10}
             
             response = requests.get(url, headers=self.headers, params=params)
             
             if response.status_code == 200:
                 messages = response.json()
                 
-                # Look for OwO bot's response
+                # Look for OwO#8456's response
                 for msg in messages:
                     author = msg.get('author', {})
-                    author_name = author.get('username', '').lower()
+                    author_name = author.get('username', '')
                     
-                    # Check if it's the OwO bot
-                    if 'owo' in author_name or 'owobot' in author_name:
-                        # Get the message content
+                    # Check if it's OwO#8456
+                    if 'OwO' in author_name:
                         content = msg.get('content', '')
                         
-                        # Check if it's a response to our command
-                        if content and len(content) > 0:
-                            # Make sure it's not our own message
-                            if content != command:
-                                # OwO bot responses typically contain specific keywords
-                                keywords = ['coins', 'found', 'earned', 'balance', 'slot', 'hunt', 'work', 'you', 'have']
-                                if any(keyword in content.lower() for keyword in keywords):
-                                    return content
+                        # Skip our own messages
+                        if content and content != command:
+                            # This is OwO#8456's response!
+                            return content
                         
-                        # Also check for embeds (OwO bot often uses embeds)
+                        # Check embeds
                         embeds = msg.get('embeds', [])
                         if embeds:
                             embed_desc = embeds[0].get('description', '')
@@ -264,76 +257,3 @@ class DiscordAPI:
         except Exception as e:
             logger.error(f"Error getting bot info: {e}")
             return None
-
-    def wait_for_owo_response(self, timeout: int = 10) -> Optional[str]:
-        """Wait for OwO bot to respond"""
-        try:
-            start_time = time.time()
-            last_messages = self.get_message_history(5)
-            
-            while time.time() - start_time < timeout:
-                time.sleep(2)
-                current_messages = self.get_message_history(5)
-                
-                if current_messages:
-                    # Check for new messages from OwO bot
-                    for msg in current_messages:
-                        author = msg.get('author', {})
-                        author_name = author.get('username', '').lower()
-                        
-                        if 'owo' in author_name:
-                            # Check if this message wasn't in the last check
-                            if msg not in last_messages:
-                                content = msg.get('content', '')
-                                if content:
-                                    return content
-                    
-                    last_messages = current_messages
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error waiting for OwO response: {e}")
-            return None
-
-    def is_owo_bot_online(self) -> bool:
-        """Check if OwO bot is online in the server"""
-        try:
-            messages = self.get_message_history(10)
-            if messages:
-                for msg in messages:
-                    author = msg.get('author', {})
-                    author_name = author.get('username', '').lower()
-                    if 'owo' in author_name:
-                        return True
-            
-            # Alternative: Check if OwO bot has sent any message recently
-            owo_messages = self.get_owo_bot_messages(1)
-            return len(owo_messages) > 0
-            
-        except Exception as e:
-            logger.error(f"Error checking OwO bot status: {e}")
-            return False
-
-    def get_owo_bot_messages(self, limit: int = 5) -> List[Dict]:
-        """Get recent OwO bot messages"""
-        try:
-            messages = self.get_message_history(limit * 2)  # Get extra to filter
-            if not messages:
-                return []
-            
-            owo_messages = []
-            for msg in messages:
-                author = msg.get('author', {})
-                author_name = author.get('username', '').lower()
-                if 'owo' in author_name:
-                    owo_messages.append(msg)
-                    
-                    if len(owo_messages) >= limit:
-                        break
-            
-            return owo_messages
-            
-        except Exception as e:
-            logger.error(f"Error getting OwO messages: {e}")
-            return []
