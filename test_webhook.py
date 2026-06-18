@@ -51,7 +51,7 @@ def test_webhook():
     print("\n📤 Test 2: Sending OwO command via webhook...")
     time.sleep(3)
     
-    command = "owo bal"
+    command = "owo cash"
     payload = {
         "content": command,
         "username": "OwO Helper",
