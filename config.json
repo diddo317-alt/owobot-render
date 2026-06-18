@@ -11,13 +11,13 @@
   },
   "commands": {
     "owo hunt": {"weight": 55, "max_per_day": null},
-    "owo work": {"weight": 15, "max_per_day": 10},
-    "owo bal": {"weight": 10, "max_per_day": 8},
-    "owo slot 50": {"weight": 8, "max_per_day": 5},
-    "owo profile": {"weight": 5, "max_per_day": 4},
+    "owo work": {"weight": 15, "max_per_day": 8},
+    "owo bal": {"weight": 10, "max_per_day": 5},
+    "owo slot 50": {"weight": 8, "max_per_day": 3},
+    "owo profile": {"weight": 5, "max_per_day": 3},
     "owo zoo": {"weight": 4, "max_per_day": 2},
     "owo daily": {"weight": 3, "max_per_day": 1},
-    "owo slot 75": {"weight": 1, "max_per_day": 2}
+    "owo slot 75": {"weight": 1, "max_per_day": 1}
   },
   "bankroll": {
     "stop_loss_percent": 30,
@@ -27,9 +27,9 @@
     "loss_recovery_wait_max": 30
   },
   "human_mimicry": {
-    "min_delay_seconds": 120,
+    "min_delay_seconds": 300,
     "max_delay_seconds": 2700,
-    "batch_chance": 0.3,
+    "batch_chance": 0.1,
     "fatigue_drop_percent": 15,
     "lazy_day_chance": 0.1,
     "energetic_day_chance": 0.1
