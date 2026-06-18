@@ -1,54 +1,74 @@
 #!/usr/bin/env python3
 """
-Test OwO Bot Response
-Run: python test_owo_response.py
+Simple OwO Bot Test
+Run: python test_owo.py
 """
 
 import os
 import sys
 import time
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Add current directory to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+TOKEN = os.getenv('DISCORD_TOKEN')
+CHANNEL_ID = os.getenv('CHANNEL_ID')
 
-from core.discord_api import DiscordAPI
-
-def test_owo_response():
-    """Test if OwO bot responds to commands"""
-    print("🧪 Testing OwO Bot Response")
-    print("=" * 50)
+def test_command(command):
+    """Test a single command"""
+    print(f"\n📤 Testing: {command}")
     
-    api = DiscordAPI()
+    url = f"https://discord.com/api/v9/channels/{CHANNEL_ID}/messages"
+    headers = {
+        "Authorization": f"Bot {TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {"content": command}
     
-    # Test commands
-    test_commands = [
-        "owo bal",
-        "owo hunt",
-        "owo work",
-    ]
+    response = requests.post(url, headers=headers, json=payload)
     
-    for cmd in test_commands:
-        print(f"\n📤 Testing: {cmd}")
-        result = api.send_command(cmd)
+    if response.status_code == 200:
+        print(f"✅ Sent: {command}")
         
-        if result.get('success'):
-            print(f"✅ Command sent successfully")
-            if result.get('owo_responded'):
-                print(f"🤖 OwO bot responded: {result.get('owo_response', '')[:100]}")
-            else:
-                print(f"⚠️ No OwO bot response detected")
-                print(f"   💡 Make sure OwO bot is online in the server")
-                print(f"   💡 Check if bot has 'Read Message History' permission")
-        else:
-            print(f"❌ Failed to send command: {result.get('error')}")
+        # Wait for OwO bot
+        print("⏳ Waiting for OwO bot...")
+        time.sleep(3)
         
-        time.sleep(3)  # Wait between tests
-    
-    print("\n" + "=" * 50)
-    print("✅ Test complete!")
+        # Check for response
+        messages_url = f"https://discord.com/api/v9/channels/{CHANNEL_ID}/messages"
+        params = {"limit": 5}
+        msgs = requests.get(messages_url, headers=headers, params=params)
+        
+        if msgs.status_code == 200:
+            for msg in msgs.json():
+                author = msg.get('author', {}).get('username', '')
+                if 'OwO' in author or 'owo' in author.lower():
+                    content = msg.get('content', '')
+                    if content and content != command:
+                        print(f"🤖 OwO replied: {content[:100]}")
+                        return True
+        
+        print("⚠️ No response from OwO bot")
+        return False
+    else:
+        print(f"❌ Failed: {response.status_code}")
+        return False
 
-if __name__ == "__main__":
-    test_owo_response()
+# Test commands
+print("🧪 Testing OwO Bot Commands")
+print("=" * 40)
+
+commands = [
+    "owo help",      # Should respond with help
+    "owo bal",       # Check balance
+    "owo hunt",      # Hunt
+    "owo work",      # Work
+]
+
+for cmd in commands:
+    test_command(cmd)
+    time.sleep(2)
+
+print("\n" + "=" * 40)
+print("✅ Test complete!")
