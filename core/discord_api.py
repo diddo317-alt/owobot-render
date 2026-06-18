@@ -17,16 +17,19 @@ class DiscordAPI:
             "Content-Type": "application/json"
         }
         self.last_command_time = 0
-        self.min_command_interval = 5  # ✅ INCREASED to avoid rate limits
-        self.owo_bot_name = None  # Will store OwO bot's name
+        # ✅ FIX: Increased to avoid rate limits
+        self.min_command_interval = 10  # 10 seconds between commands
+        self.owo_bot_name = None
+        self.max_retries = 3
+        self.retry_delay = 5
         
         # Set bot presence/status on initialization
         self.set_presence()
-        # ✅ Find OwO bot in the channel
+        # Find OwO bot in the channel
         self.find_owo_bot()
 
     def find_owo_bot(self):
-        """✅ ADD THIS: Find the OwO bot in the channel"""
+        """Find the OwO bot in the channel"""
         try:
             # Get recent messages to find OwO bot
             messages = self.get_message_history(50)
@@ -65,8 +68,6 @@ class DiscordAPI:
                 logger.info(f"✅ Gateway connected: {gateway_data.get('url')}")
                 
                 # For bot accounts, we use the gateway connection
-                # Since we can't directly set presence via REST for bots,
-                # we log the status and send a heartbeat message
                 logger.info(f"🎯 Bot presence: {status} - {activity_type}: {activity_name}")
                 
                 # Send a simple status message to show bot is online
@@ -96,12 +97,16 @@ class DiscordAPI:
             logger.warning(f"Could not send status message: {e}")
 
     def send_command(self, command: str) -> Dict[str, Any]:
-        """✅ FIXED: Send a command and check for OwO bot response"""
+        """Send a command to Discord channel with rate limit handling"""
         try:
-            # Rate limiting
+            # Rate limiting with exponential backoff
             current_time = time.time()
-            if current_time - self.last_command_time < self.min_command_interval:
-                time.sleep(self.min_command_interval - (current_time - self.last_command_time))
+            time_since_last = current_time - self.last_command_time
+            
+            if time_since_last < self.min_command_interval:
+                wait_time = self.min_command_interval - time_since_last
+                logger.info(f"⏰ Rate limit: Waiting {wait_time:.1f} seconds...")
+                time.sleep(wait_time)
 
             url = f"{self.base_url}/channels/{self.channel_id}/messages"
             payload = {"content": command}
@@ -109,15 +114,16 @@ class DiscordAPI:
             response = requests.post(url, headers=self.headers, json=payload)
             self.last_command_time = time.time()
             
+            # Handle different response codes
             if response.status_code == 200:
                 logger.info(f"✅ Command sent: {command}")
                 message_data = response.json()
                 
-                # ✅ ADD THIS: Wait for OwO bot to respond
+                # Wait for OwO bot to respond
                 logger.info("⏳ Waiting for OwO bot response...")
-                time.sleep(3)  # Give OwO bot time to respond
+                time.sleep(5)  # Give OwO bot time to respond
                 
-                # ✅ ADD THIS: Check if OwO bot responded
+                # Check if OwO bot responded
                 owo_response = self.check_owo_response(command)
                 
                 if owo_response:
@@ -135,24 +141,34 @@ class DiscordAPI:
                     "owo_response": owo_response
                 }
                 
+            elif response.status_code == 429:
+                # Rate limited - handle with retry
+                try:
+                    retry_data = response.json()
+                    retry_after = retry_data.get('retry_after', 10)
+                except:
+                    retry_after = 10
+                
+                logger.warning(f"⏰ Rate limited! Waiting {retry_after} seconds...")
+                time.sleep(retry_after)
+                
+                # Retry the command (with recursion limit protection)
+                return self.send_command_with_retry(command, 1)
+                
             elif response.status_code == 401:
                 logger.error("❌ Invalid token! Check DISCORD_TOKEN")
                 return {"success": False, "error": "Invalid token"}
+                
             elif response.status_code == 403:
                 logger.error("❌ No permission! Check bot permissions")
+                logger.info("💡 Re-invite bot with Administrator permissions")
                 return {"success": False, "error": "No permission"}
+                
             elif response.status_code == 404:
                 logger.error("❌ Channel not found! Check CHANNEL_ID")
+                logger.info("💡 Enable Developer Mode and right-click channel -> Copy ID")
                 return {"success": False, "error": "Channel not found"}
-            elif response.status_code == 429:
-                logger.warning("⏰ Rate limited! Waiting...")
-                time.sleep(5)
-                # Retry once after rate limit
-                response = requests.post(url, headers=self.headers, json=payload)
-                if response.status_code == 200:
-                    return {"success": True, "response": response.json()}
-                else:
-                    return {"success": False, "error": response.text}
+                
             else:
                 logger.error(f"API Error: {response.status_code} - {response.text}")
                 return {"success": False, "error": response.text}
@@ -161,8 +177,19 @@ class DiscordAPI:
             logger.error(f"Error sending command: {e}")
             return {"success": False, "error": str(e)}
 
+    def send_command_with_retry(self, command: str, attempt: int) -> Dict[str, Any]:
+        """Send command with retry logic"""
+        if attempt > self.max_retries:
+            logger.error(f"❌ Max retries exceeded for command: {command}")
+            return {"success": False, "error": "Max retries exceeded"}
+        
+        logger.info(f"🔄 Retry attempt {attempt}/{self.max_retries} for: {command}")
+        time.sleep(self.retry_delay * attempt)  # Exponential backoff
+        
+        return self.send_command(command)
+
     def check_owo_response(self, command: str) -> Optional[str]:
-        """✅ ADD THIS: Check if OwO bot responded to the command"""
+        """Check if OwO bot responded to the command"""
         try:
             # Get recent messages
             url = f"{self.base_url}/channels/{self.channel_id}/messages"
@@ -184,13 +211,11 @@ class DiscordAPI:
                         content = msg.get('content', '')
                         
                         # Check if it's a response to our command
-                        # OwO bot responses typically contain the command or a reaction
                         if content and len(content) > 0:
                             # Make sure it's not our own message
                             if content != command:
-                                # Additional check: OwO bot responses often have specific formatting
-                                # Example: "You found a Deer! (+150 coins)"
-                                if 'owo' not in content.lower() or 'hunt' in content.lower() or 'work' in content.lower():
+                                # OwO bot responses typically contain specific text
+                                if any(keyword in content.lower() for keyword in ['coins', 'found', 'earned', 'balance', 'slot', 'hunt', 'work']):
                                     return content
                         
                         # Also check for embeds (OwO bot often uses embeds)
@@ -211,7 +236,7 @@ class DiscordAPI:
             return None
 
     def get_owo_bot_messages(self, limit: int = 5) -> List[Dict]:
-        """✅ ADD THIS: Get recent OwO bot messages"""
+        """Get recent OwO bot messages"""
         try:
             messages = self.get_message_history(limit * 2)  # Get extra to filter
             if not messages:
@@ -266,3 +291,55 @@ class DiscordAPI:
         except Exception as e:
             logger.error(f"Error getting bot info: {e}")
             return None
+
+    def wait_for_owo_response(self, timeout: int = 10) -> Optional[str]:
+        """Wait for OwO bot to respond"""
+        try:
+            start_time = time.time()
+            last_messages = self.get_message_history(5)
+            
+            while time.time() - start_time < timeout:
+                time.sleep(2)
+                current_messages = self.get_message_history(5)
+                
+                if current_messages:
+                    # Check for new messages from OwO bot
+                    for msg in current_messages:
+                        author = msg.get('author', {})
+                        author_name = author.get('username', '').lower()
+                        
+                        if 'owo' in author_name:
+                            # Check if this message wasn't in the last check
+                            if msg not in last_messages:
+                                content = msg.get('content', '')
+                                if content:
+                                    return content
+                    
+                    last_messages = current_messages
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error waiting for OwO response: {e}")
+            return None
+
+    def is_owo_bot_online(self) -> bool:
+        """Check if OwO bot is online in the server"""
+        try:
+            # Get members in the server
+            # This requires Guild Members intent
+            messages = self.get_message_history(10)
+            if messages:
+                for msg in messages:
+                    author = msg.get('author', {})
+                    author_name = author.get('username', '').lower()
+                    if 'owo' in author_name:
+                        return True
+            
+            # Alternative: Check if OwO bot has sent any message recently
+            owo_messages = self.get_owo_bot_messages(1)
+            return len(owo_messages) > 0
+            
+        except Exception as e:
+            logger.error(f"Error checking OwO bot status: {e}")
+            return False
