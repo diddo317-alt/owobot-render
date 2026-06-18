@@ -17,6 +17,11 @@ class BankManager:
         self.last_gamble_time = None
         self.consecutive_losses = 0
         self.winning_streak = 0
+        
+        # Initialize current balance if not set
+        if self.current_balance == 0:
+            self.current_balance = 1000  # Starting balance
+            self.save_state()
 
     def load_state(self) -> Dict:
         """Load bank state from file"""
@@ -54,6 +59,7 @@ class BankManager:
         self.consecutive_losses = 0
         self.winning_streak = 0
         self.save_state()
+        logger.info(f"📊 Daily start balance: {self.daily_start_balance}")
 
     def can_gamble(self) -> bool:
         """Check if gambling is allowed based on bankroll management"""
@@ -62,14 +68,14 @@ class BankManager:
             loss_percent = ((self.daily_start_balance - self.current_balance) / 
                           self.daily_start_balance) * 100
             if loss_percent >= self.config['stop_loss_percent']:
-                logger.info(f"Stop-loss triggered: {loss_percent:.1f}% loss")
+                logger.info(f"⛔ Stop-loss triggered: {loss_percent:.1f}% loss")
                 return False
 
         # Check win lock-in
         if self.winning_streak >= 3:
             if self.current_balance > self.daily_start_balance * 1.2:
                 lock_duration = self.config['win_lock_duration']
-                logger.info(f"Win lock-in active for {lock_duration} hours")
+                logger.info(f"🔒 Win lock-in active for {lock_duration} hours")
                 return False
 
         # Check loss recovery wait time
@@ -80,7 +86,7 @@ class BankManager:
             )
             time_since = (datetime.now() - self.last_gamble_time).total_seconds() / 60
             if time_since < wait_minutes:
-                logger.info(f"Loss recovery wait: {wait_minutes - time_since:.0f} minutes remaining")
+                logger.info(f"⏰ Loss recovery wait: {wait_minutes - time_since:.0f} minutes remaining")
                 return False
 
         return True
@@ -89,9 +95,8 @@ class BankManager:
         """Calculate bet amount based on current balance"""
         max_bet = int(self.current_balance * (self.config['max_bet_percent'] / 100))
         bet_options = [25, 50, 75, 100]
-        bet = min(max(bet_options), max_bet)
         
-        # Randomly select from available options
+        # Filter options based on balance
         available_bets = [b for b in bet_options if b <= max_bet]
         if not available_bets:
             return min(25, max_bet)
@@ -104,7 +109,9 @@ class BankManager:
         if won:
             self.winning_streak += 1
             self.consecutive_losses = 0
+            logger.info(f"🎉 Won {amount} coins! Streak: {self.winning_streak}")
         else:
             self.consecutive_losses += 1
             self.winning_streak = 0
+            logger.info(f"😢 Lost {amount} coins. Losses: {self.consecutive_losses}")
         self.save_state()
