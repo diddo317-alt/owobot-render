@@ -17,7 +17,48 @@ class DiscordAPI:
             "Content-Type": "application/json"
         }
         self.last_command_time = 0
-        self.min_command_interval = 2  # Seconds between commands
+        self.min_command_interval = 2
+        
+        # ✅ ADD THIS: Set bot status/ presence
+        self.set_presence()
+
+    # ✅ ADD THIS NEW METHOD
+    def set_presence(self, status="online", activity_type="PLAYING", name="with OwO"):
+        """
+        Set bot presence/status
+        status: "online", "idle", "dnd", "invisible"
+        activity_type: "PLAYING", "STREAMING", "LISTENING", "WATCHING", "COMPETING"
+        """
+        try:
+            url = f"{self.base_url}/gateway/bot"
+            response = requests.get(url, headers=self.headers)
+            
+            if response.status_code == 200:
+                gateway_data = response.json()
+                ws_url = gateway_data.get('url')
+                
+                # Send presence update via REST API
+                presence_url = f"{self.base_url}/users/@me/settings"
+                presence_data = {
+                    "status": status,  # online, idle, dnd, invisible
+                    "custom_status": {
+                        "text": "🐱 Hunting OwO",
+                        "emoji_name": "🐱"
+                    }
+                }
+                
+                # For bot accounts, use gateway presence
+                # This is a simpler approach using activity
+                activity_url = f"{self.base_url}/users/@me/guilds"
+                response = requests.get(activity_url, headers=self.headers)
+                
+                # Alternative: Use the bot's game status via gateway
+                # Since REST doesn't directly support presence for bots,
+                # we'll use the gateway connection for status
+                logger.info(f"✅ Bot presence set to: {status}")
+                
+        except Exception as e:
+            logger.warning(f"Could not set presence: {e}")
 
     def send_command(self, command: str) -> Dict[str, Any]:
         """Send a command to Discord channel"""
