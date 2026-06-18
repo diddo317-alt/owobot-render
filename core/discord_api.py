@@ -11,21 +11,25 @@ class DiscordAPI:
     def __init__(self):
         self.token = os.getenv('DISCORD_TOKEN')
         self.channel_id = os.getenv('CHANNEL_ID')
+        # ✅ YOUR WEBHOOK URL
+        self.webhook_url = "https://discord.com/api/webhooks/1517291484229931088/AYocNg663jfym1NrYzUoW15qeCcWJEBSJDhW395XpBtbepCt2SbNAZw39JCw4itHCIXf"
         self.base_url = "https://discord.com/api/v9"
         self.headers = {
             "Authorization": f"Bot {self.token}",
             "Content-Type": "application/json"
         }
         self.last_command_time = 0
-        # ✅ FIX: Increased to avoid rate limits
         self.min_command_interval = 10  # 10 seconds between commands
         self.owo_bot_name = None
         self.max_retries = 3
         self.retry_delay = 5
         
+        # ✅ Always use webhook mode
+        self.use_webhook = True
+        logger.info("✅ Using Webhook mode (messages appear as user - OwO bot will respond!)")
+        
         # Set bot presence/status on initialization
         self.set_presence()
-        # Find OwO bot in the channel
         self.find_owo_bot()
 
     def find_owo_bot(self):
@@ -82,13 +86,16 @@ class DiscordAPI:
     def send_status_message(self):
         """Send a status message to show bot is online"""
         try:
-            if self.channel_id:
-                url = f"{self.base_url}/channels/{self.channel_id}/messages"
-                payload = {"content": "🟢 Bot is online and ready!"}
+            if self.webhook_url:
+                payload = {
+                    "content": "🟢 Bot is online and ready! (Webhook Mode)",
+                    "username": "OwO Helper",
+                    "avatar_url": "https://cdn.discordapp.com/embed/avatars/1.png"
+                }
                 
-                response = requests.post(url, headers=self.headers, json=payload)
+                response = requests.post(self.webhook_url, json=payload)
                 
-                if response.status_code == 200:
+                if response.status_code == 204:
                     logger.info("✅ Status message sent - bot is online!")
                 else:
                     logger.warning(f"Could not send status message: {response.status_code}")
@@ -97,31 +104,42 @@ class DiscordAPI:
             logger.warning(f"Could not send status message: {e}")
 
     def send_command(self, command: str) -> Dict[str, Any]:
-        """Send a command to Discord channel with rate limit handling"""
+        """Send a command using webhook (appears as user-like message)"""
         try:
-            # Rate limiting with exponential backoff
+            # Rate limiting
             current_time = time.time()
             time_since_last = current_time - self.last_command_time
             
             if time_since_last < self.min_command_interval:
                 wait_time = self.min_command_interval - time_since_last
-                logger.info(f"⏰ Rate limit: Waiting {wait_time:.1f} seconds...")
+                logger.info(f"⏰ Waiting {wait_time:.1f} seconds...")
                 time.sleep(wait_time)
 
-            url = f"{self.base_url}/channels/{self.channel_id}/messages"
-            payload = {"content": command}
+            # ✅ SEND VIA WEBHOOK
+            return self.send_via_webhook(command)
+                
+        except Exception as e:
+            logger.error(f"Error sending command: {e}")
+            return {"success": False, "error": str(e)}
+
+    def send_via_webhook(self, command: str) -> Dict[str, Any]:
+        """Send command via webhook (appears as user-like message)"""
+        try:
+            payload = {
+                "content": command,
+                "username": "OwO Helper",  # Custom name that appears in Discord
+                "avatar_url": "https://cdn.discordapp.com/embed/avatars/1.png"  # Custom avatar
+            }
             
-            response = requests.post(url, headers=self.headers, json=payload)
+            response = requests.post(self.webhook_url, json=payload)
             self.last_command_time = time.time()
             
-            # Handle different response codes
-            if response.status_code == 200:
-                logger.info(f"✅ Command sent: {command}")
-                message_data = response.json()
+            if response.status_code == 204:  # Webhook success (no content returned)
+                logger.info(f"✅ Command sent via webhook: {command}")
                 
                 # Wait for OwO bot to respond
-                logger.info("⏳ Waiting for OwO bot response...")
-                time.sleep(5)  # Give OwO bot time to respond
+                logger.info("⏳ Waiting for OwO bot response (5 seconds)...")
+                time.sleep(5)
                 
                 # Check if OwO bot responded
                 owo_response = self.check_owo_response(command)
@@ -129,64 +147,41 @@ class DiscordAPI:
                 if owo_response:
                     logger.info(f"🤖 OwO bot responded!")
                     logger.info(f"📝 Response: {owo_response[:200]}")
+                    return {
+                        "success": True,
+                        "owo_responded": True,
+                        "owo_response": owo_response
+                    }
                 else:
                     logger.warning("⚠️ No OwO bot response detected")
                     logger.info("💡 Make sure OwO bot is online in the server!")
-                    logger.info("💡 Also check if the bot has 'Read Message History' permission")
-                
-                return {
-                    "success": True, 
-                    "response": message_data,
-                    "owo_responded": owo_response is not None,
-                    "owo_response": owo_response
-                }
-                
+                    return {
+                        "success": True,
+                        "owo_responded": False,
+                        "owo_response": None
+                    }
+                    
             elif response.status_code == 429:
-                # Rate limited - handle with retry
+                # Rate limited
                 try:
-                    retry_data = response.json()
-                    retry_after = retry_data.get('retry_after', 10)
+                    retry_after = response.json().get('retry_after', 10)
                 except:
                     retry_after = 10
                 
                 logger.warning(f"⏰ Rate limited! Waiting {retry_after} seconds...")
                 time.sleep(retry_after)
                 
-                # Retry the command (with recursion limit protection)
-                return self.send_command_with_retry(command, 1)
-                
-            elif response.status_code == 401:
-                logger.error("❌ Invalid token! Check DISCORD_TOKEN")
-                return {"success": False, "error": "Invalid token"}
-                
-            elif response.status_code == 403:
-                logger.error("❌ No permission! Check bot permissions")
-                logger.info("💡 Re-invite bot with Administrator permissions")
-                return {"success": False, "error": "No permission"}
-                
-            elif response.status_code == 404:
-                logger.error("❌ Channel not found! Check CHANNEL_ID")
-                logger.info("💡 Enable Developer Mode and right-click channel -> Copy ID")
-                return {"success": False, "error": "Channel not found"}
+                # Retry
+                return self.send_via_webhook(command)
                 
             else:
-                logger.error(f"API Error: {response.status_code} - {response.text}")
-                return {"success": False, "error": response.text}
+                logger.error(f"Webhook error: {response.status_code}")
+                logger.error(f"Response: {response.text}")
+                return {"success": False, "error": f"Webhook error: {response.status_code}"}
                 
         except Exception as e:
-            logger.error(f"Error sending command: {e}")
+            logger.error(f"Webhook error: {e}")
             return {"success": False, "error": str(e)}
-
-    def send_command_with_retry(self, command: str, attempt: int) -> Dict[str, Any]:
-        """Send command with retry logic"""
-        if attempt > self.max_retries:
-            logger.error(f"❌ Max retries exceeded for command: {command}")
-            return {"success": False, "error": "Max retries exceeded"}
-        
-        logger.info(f"🔄 Retry attempt {attempt}/{self.max_retries} for: {command}")
-        time.sleep(self.retry_delay * attempt)  # Exponential backoff
-        
-        return self.send_command(command)
 
     def check_owo_response(self, command: str) -> Optional[str]:
         """Check if OwO bot responded to the command"""
@@ -214,8 +209,9 @@ class DiscordAPI:
                         if content and len(content) > 0:
                             # Make sure it's not our own message
                             if content != command:
-                                # OwO bot responses typically contain specific text
-                                if any(keyword in content.lower() for keyword in ['coins', 'found', 'earned', 'balance', 'slot', 'hunt', 'work']):
+                                # OwO bot responses typically contain specific keywords
+                                keywords = ['coins', 'found', 'earned', 'balance', 'slot', 'hunt', 'work', 'you', 'have']
+                                if any(keyword in content.lower() for keyword in keywords):
                                     return content
                         
                         # Also check for embeds (OwO bot often uses embeds)
@@ -234,29 +230,6 @@ class DiscordAPI:
         except Exception as e:
             logger.error(f"Error checking OwO response: {e}")
             return None
-
-    def get_owo_bot_messages(self, limit: int = 5) -> List[Dict]:
-        """Get recent OwO bot messages"""
-        try:
-            messages = self.get_message_history(limit * 2)  # Get extra to filter
-            if not messages:
-                return []
-            
-            owo_messages = []
-            for msg in messages:
-                author = msg.get('author', {})
-                author_name = author.get('username', '').lower()
-                if 'owo' in author_name:
-                    owo_messages.append(msg)
-                    
-                    if len(owo_messages) >= limit:
-                        break
-            
-            return owo_messages
-            
-        except Exception as e:
-            logger.error(f"Error getting OwO messages: {e}")
-            return []
 
     def get_message_history(self, limit: int = 50) -> Optional[list]:
         """Get recent message history from channel"""
@@ -326,8 +299,6 @@ class DiscordAPI:
     def is_owo_bot_online(self) -> bool:
         """Check if OwO bot is online in the server"""
         try:
-            # Get members in the server
-            # This requires Guild Members intent
             messages = self.get_message_history(10)
             if messages:
                 for msg in messages:
@@ -343,3 +314,26 @@ class DiscordAPI:
         except Exception as e:
             logger.error(f"Error checking OwO bot status: {e}")
             return False
+
+    def get_owo_bot_messages(self, limit: int = 5) -> List[Dict]:
+        """Get recent OwO bot messages"""
+        try:
+            messages = self.get_message_history(limit * 2)  # Get extra to filter
+            if not messages:
+                return []
+            
+            owo_messages = []
+            for msg in messages:
+                author = msg.get('author', {})
+                author_name = author.get('username', '').lower()
+                if 'owo' in author_name:
+                    owo_messages.append(msg)
+                    
+                    if len(owo_messages) >= limit:
+                        break
+            
+            return owo_messages
+            
+        except Exception as e:
+            logger.error(f"Error getting OwO messages: {e}")
+            return []
