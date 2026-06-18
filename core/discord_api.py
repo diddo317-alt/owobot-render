@@ -17,48 +17,57 @@ class DiscordAPI:
             "Content-Type": "application/json"
         }
         self.last_command_time = 0
-        self.min_command_interval = 2
+        self.min_command_interval = 2  # Seconds between commands
         
-        # ✅ ADD THIS: Set bot status/ presence
+        # Set bot presence/status on initialization
         self.set_presence()
 
-    # ✅ ADD THIS NEW METHOD
-    def set_presence(self, status="online", activity_type="PLAYING", name="with OwO"):
+    def set_presence(self, status="online", activity_name="OwO hunting 🐱", activity_type=0):
         """
         Set bot presence/status
         status: "online", "idle", "dnd", "invisible"
-        activity_type: "PLAYING", "STREAMING", "LISTENING", "WATCHING", "COMPETING"
+        activity_type: 0=Playing, 1=Streaming, 2=Listening, 3=Watching, 5=Competing
+        activity_name: Name of the activity
         """
         try:
-            url = f"{self.base_url}/gateway/bot"
-            response = requests.get(url, headers=self.headers)
+            # Get gateway information
+            gateway_url = f"{self.base_url}/gateway/bot"
+            response = requests.get(gateway_url, headers=self.headers)
             
             if response.status_code == 200:
                 gateway_data = response.json()
-                ws_url = gateway_data.get('url')
+                logger.info(f"✅ Gateway connected: {gateway_data.get('url')}")
                 
-                # Send presence update via REST API
-                presence_url = f"{self.base_url}/users/@me/settings"
-                presence_data = {
-                    "status": status,  # online, idle, dnd, invisible
-                    "custom_status": {
-                        "text": "🐱 Hunting OwO",
-                        "emoji_name": "🐱"
-                    }
-                }
+                # For bot accounts, we use the gateway connection
+                # Since we can't directly set presence via REST for bots,
+                # we log the status and send a heartbeat message
+                logger.info(f"🎯 Bot presence: {status} - {activity_type}: {activity_name}")
                 
-                # For bot accounts, use gateway presence
-                # This is a simpler approach using activity
-                activity_url = f"{self.base_url}/users/@me/guilds"
-                response = requests.get(activity_url, headers=self.headers)
+                # Send a simple status message to show bot is online
+                self.send_status_message()
                 
-                # Alternative: Use the bot's game status via gateway
-                # Since REST doesn't directly support presence for bots,
-                # we'll use the gateway connection for status
-                logger.info(f"✅ Bot presence set to: {status}")
+            else:
+                logger.warning(f"Could not connect to gateway: {response.status_code}")
                 
         except Exception as e:
             logger.warning(f"Could not set presence: {e}")
+
+    def send_status_message(self):
+        """Send a status message to show bot is online"""
+        try:
+            if self.channel_id:
+                url = f"{self.base_url}/channels/{self.channel_id}/messages"
+                payload = {"content": "🟢 Bot is online and ready!"}
+                
+                response = requests.post(url, headers=self.headers, json=payload)
+                
+                if response.status_code == 200:
+                    logger.info("✅ Status message sent - bot is online!")
+                else:
+                    logger.warning(f"Could not send status message: {response.status_code}")
+                    
+        except Exception as e:
+            logger.warning(f"Could not send status message: {e}")
 
     def send_command(self, command: str) -> Dict[str, Any]:
         """Send a command to Discord channel"""
@@ -77,6 +86,24 @@ class DiscordAPI:
             if response.status_code == 200:
                 logger.info(f"Command sent: {command}")
                 return {"success": True, "response": response.json()}
+            elif response.status_code == 401:
+                logger.error("❌ Invalid token! Check DISCORD_TOKEN")
+                return {"success": False, "error": "Invalid token"}
+            elif response.status_code == 403:
+                logger.error("❌ No permission! Check bot permissions")
+                return {"success": False, "error": "No permission"}
+            elif response.status_code == 404:
+                logger.error("❌ Channel not found! Check CHANNEL_ID")
+                return {"success": False, "error": "Channel not found"}
+            elif response.status_code == 429:
+                logger.warning("⏰ Rate limited! Waiting...")
+                time.sleep(5)
+                # Retry once after rate limit
+                response = requests.post(url, headers=self.headers, json=payload)
+                if response.status_code == 200:
+                    return {"success": True, "response": response.json()}
+                else:
+                    return {"success": False, "error": response.text}
             else:
                 logger.error(f"API Error: {response.status_code} - {response.text}")
                 return {"success": False, "error": response.text}
@@ -101,4 +128,20 @@ class DiscordAPI:
                 
         except Exception as e:
             logger.error(f"Error getting message history: {e}")
+            return None
+
+    def get_bot_info(self) -> Optional[Dict]:
+        """Get bot information"""
+        try:
+            url = f"{self.base_url}/users/@me"
+            response = requests.get(url, headers=self.headers)
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logger.error(f"Error getting bot info: {response.status_code}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error getting bot info: {e}")
             return None
