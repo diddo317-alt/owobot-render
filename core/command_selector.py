@@ -13,45 +13,66 @@ class CommandSelector:
         self.daily_usage = {cmd: 0 for cmd in self.commands}
         self.last_used = {cmd: 0 for cmd in self.commands}
         
-        # ✅ FIX: Validate and correct command formats
-        self.validate_commands()
+        # ✅ FORCE FIX: Ensure ALL commands have 'owo ' prefix
+        self.force_owo_prefix()
 
-    def validate_commands(self):
-        """✅ ADD THIS: Ensure all commands have proper 'owo ' prefix"""
-        corrected_commands = []
+    def force_owo_prefix(self):
+        """✅ FORCE all commands to have 'owo ' prefix"""
+        corrected_commands = {}
         
         for cmd in self.commands:
             # Check if command already has 'owo ' prefix
-            if not cmd.startswith('owo '):
-                # Check if it's a single word command (like 'hunt', 'work', 'bal')
-                if ' ' not in cmd:
-                    # Add 'owo ' prefix
-                    corrected_cmd = f'owo {cmd}'
-                    logger.info(f"✅ Corrected command: '{cmd}' -> '{corrected_cmd}'")
-                    
-                    # Update the command in all dictionaries
-                    idx = self.commands.index(cmd)
-                    self.commands[idx] = corrected_cmd
-                    
-                    # Update daily_usage
-                    if cmd in self.daily_usage:
-                        self.daily_usage[corrected_cmd] = self.daily_usage.pop(cmd, 0)
-                    
-                    # Update last_used
-                    if cmd in self.last_used:
-                        self.last_used[corrected_cmd] = self.last_used.pop(cmd, 0)
-                    
-                    # Update max_per_day
-                    if cmd in self.max_per_day:
-                        self.max_per_day[corrected_cmd] = self.max_per_day.pop(cmd, None)
-                    
-                    # Update commands_config
-                    if cmd in self.commands_config:
-                        self.commands_config[corrected_cmd] = self.commands_config.pop(cmd)
+            if not cmd.lower().startswith('owo '):
+                # Remove any existing prefix and add 'owo '
+                # Split by space and take the last part (the actual command)
+                parts = cmd.split()
+                if parts:
+                    # If it's a command with arguments (like 'slot 50')
+                    if len(parts) > 1 and parts[0].lower() != 'owo':
+                        # Keep arguments, add 'owo ' prefix
+                        actual_cmd = ' '.join(parts)
+                        corrected_cmd = f'owo {actual_cmd}'
+                    elif len(parts) == 1:
+                        # Single word command
+                        corrected_cmd = f'owo {parts[0]}'
+                    else:
+                        corrected_cmd = cmd
+                else:
+                    corrected_cmd = cmd
+                
+                logger.info(f"✅ Force corrected: '{cmd}' -> '{corrected_cmd}'")
+                
+                # Update all dictionaries
+                idx = self.commands.index(cmd)
+                self.commands[idx] = corrected_cmd
+                
+                if cmd in self.daily_usage:
+                    self.daily_usage[corrected_cmd] = self.daily_usage.pop(cmd, 0)
+                if cmd in self.last_used:
+                    self.last_used[corrected_cmd] = self.last_used.pop(cmd, 0)
+                if cmd in self.max_per_day:
+                    self.max_per_day[corrected_cmd] = self.max_per_day.pop(cmd, None)
+                if cmd in self.commands_config:
+                    self.commands_config[corrected_cmd] = self.commands_config.pop(cmd)
+            else:
+                # Already has 'owo ' prefix, keep it
+                corrected_commands[cmd] = self.commands_config[cmd]
         
         # Rebuild commands list
         self.commands = list(self.commands_config.keys())
-        logger.info(f"✅ Final commands: {self.commands}")
+        
+        # Log final commands
+        logger.info(f"📋 FINAL COMMANDS: {self.commands}")
+        
+        # Double-check all commands have 'owo ' prefix
+        for cmd in self.commands:
+            if not cmd.lower().startswith('owo '):
+                logger.error(f"❌ COMMAND WITHOUT PREFIX: {cmd}")
+                # Force fix it
+                fixed_cmd = f'owo {cmd}'
+                logger.info(f"🔧 Emergency fix: {cmd} -> {fixed_cmd}")
+                idx = self.commands.index(cmd)
+                self.commands[idx] = fixed_cmd
 
     def select_command(self) -> str:
         """Select a command based on weighted probability"""
